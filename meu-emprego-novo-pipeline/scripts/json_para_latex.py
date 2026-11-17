@@ -46,15 +46,28 @@ def gerar(d):
     b = d["basics"]
     loc = b.get("location", {})
     local = ", ".join(x for x in (loc.get("city"), loc.get("region")) if x)
-    contatos = " $\\cdot$ ".join(esc(x) for x in (local, b.get("email"), b.get("phone"), b.get("url")) if x)
+    contatos = " $\\cdot$ ".join(esc(x) for x in (local, b.get("email"), b.get("phone")) if x)
+    # Links: LinkedIn e demais perfis primeiro, depois basics.url (sem duplicar), sem "https://".
+    urls = [p.get("url") for p in b.get("profiles", []) if p.get("url")] + [b.get("url")]
+    links = []
+    for u in urls:
+        if u and u.rstrip("/") not in (x.rstrip("/") for x in links):
+            links.append(u)
+    links_txt = " $\\cdot$ ".join(esc(re.sub(r"^https?://(www\.)?", "", u).rstrip("/")) for u in links)
+    if links_txt:
+        contatos += f"\\\\\n{links_txt}"
 
     out = [
         r"\documentclass[10pt,a4paper]{article}",
         r"\usepackage[utf8]{inputenc}",
         r"\usepackage[T1]{fontenc}",
+        r"\usepackage{lmodern}",
+        r"\input{glyphtounicode}",
+        r"\pdfgentounicode=1",
         r"\usepackage[margin=1.8cm]{geometry}",
         r"\usepackage{enumitem}",
         r"\usepackage{titlesec}",
+        r"\usepackage{needspace}",
         r"\setlist[itemize]{leftmargin=1.2em,itemsep=1pt,topsep=2pt}",
         r"\titleformat{\section}{\large\bfseries}{}{0em}{}[\titlerule]",
         r"\titlespacing*{\section}{0pt}{10pt}{4pt}",
@@ -69,11 +82,16 @@ def gerar(d):
         secao("Experiência"),
     ]
 
-    for w in d["work"]:
+    for i, w in enumerate(d["work"]):
         cab = f"\\textbf{{{esc(w['position'])}}}, {esc(w['name'])}"
         if w.get("location"):
             cab += f" ({esc(w['location'])})"
-        out.append(f"{cab} \\hfill {esc(periodo(w))}\\\\")
+        if i:
+            out.append(r"\vspace{6pt}")
+        # Mantém o cabeçalho junto dos primeiros tópicos (evita cabeçalho órfão no fim da página).
+        out.append(r"\needspace{4\baselineskip}")
+        # Sem "\\" no fim: a quebra forçada antes do itemize criava uma linha vazia extra.
+        out.append(f"{cab} \\hfill {esc(periodo(w))}\\par")
         out.append(r"\begin{itemize}")
         out.extend(f"  \\item {esc(h)}" for h in w.get("highlights", []))
         out.append(r"\end{itemize}")
@@ -89,12 +107,12 @@ def gerar(d):
 
     out.append(secao("Competências"))
     for s in d["skills"]:
-        out.append(f"\\textbf{{{esc(s['name'])}}}: {esc(', '.join(s.get('keywords', [])))}\\\\")
+        out.append(f"\\textbf{{{esc(s['name'])}}}: {esc(', '.join(s.get('keywords', [])))}\\par")
 
     out.append(secao("Formação"))
     for e in d["education"]:
         linha = f"\\textbf{{{esc(e.get('studyType', ''))} em {esc(e.get('area', ''))}}}, {esc(e.get('institution', ''))}"
-        out.append(f"{linha} \\hfill {esc(periodo(e))}\\\\")
+        out.append(f"{linha} \\hfill {esc(periodo(e))}\\par")
 
     if d.get("certificates"):
         out.append(secao("Certificações"))
